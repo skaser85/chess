@@ -6,10 +6,12 @@
 #define NOB_STRIP_PREFIX
 #include "./nob.h"
 
-#define SW 1200
-#define SH 720
+//#define SW 1200
+//#define SH 720
+#define SW 1920
+#define SH 1080
 #define BLACK_SQR_COLOR 0x1c1916ff
-#define CRAPPY_DIM 100
+#define LETTER_FONT_SIZE 40
 
 typedef enum {
   None,
@@ -23,7 +25,8 @@ typedef enum {
 
 typedef struct {
   Rectangle rect;
-  bool is_dark;
+  bool is_cell_dark;
+  bool is_piece_dark;
   size_t row;
   size_t col;
   Piece piece;
@@ -34,6 +37,20 @@ typedef struct {
   size_t count;
   size_t capacity;
 } Cells;
+
+typedef struct {
+    const char* file_path;
+    Texture2D tex;
+    size_t piece_dim;
+    size_t y_white;
+    size_t y_black;
+    size_t rook;
+    size_t horsey;
+    size_t bishop;
+    size_t queen;
+    size_t king;
+    size_t pawn;
+} PiecesTexture;
 
 size_t GetPieceValue(Piece p) {
   switch (p) {
@@ -65,7 +82,8 @@ void CreateCells(Rectangle board, Cells* cells) {
             Rectangle r = { .x = x, .y = y, .width = cell_dim, .height = cell_dim };
             Cell* c = malloc(sizeof(Cell));
             c->rect = r;
-            c->is_dark = ((row % 2 == 0 && col % 2 == 1) || (row % 2 == 1 && col % 2 == 0));
+            c->is_cell_dark = ((row % 2 == 0 && col % 2 == 1) || (row % 2 == 1 && col % 2 == 0));
+            c->is_piece_dark = row == 6 || row == 7;
             c->row = row;
             c->col = col;
             c->piece = None;
@@ -89,12 +107,83 @@ void CreateCells(Rectangle board, Cells* cells) {
     }
 }
 
+void DrawPiece(Cell c, PiecesTexture p) {
+    size_t src_y = c.is_piece_dark ? p.y_black : p.y_white;
+    size_t src_x = 0;
+    switch (c.piece) {
+        case None: return;
+        case Rook: src_x = p.rook; break;
+        case Knight: src_x = p.horsey; break;
+        case Bishop: src_x = p.bishop; break;
+        case Queen: src_x = p.queen; break;
+        case King: src_x = p.king; break;
+        case Pawn: src_x = p.pawn; break;
+    }
+    size_t pc_dim = c.rect.width*0.9;
+    size_t padding = c.rect.width - pc_dim;
+    Rectangle src = { .x = src_x, .y = src_y, .width = p.piece_dim, .height = p.piece_dim};
+    Rectangle dest = { .x = c.rect.x + padding/2, .y = c.rect.y + padding/2, .width = pc_dim, .height = pc_dim };
+    DrawTexturePro(p.tex, src, dest, Vector2Zero(), 0, WHITE);
+}
+
+PiecesTexture GetPiecesTexture(const char* name) { 
+    PiecesTexture pieces = {0};
+    
+    if (strcmp(name, "crappy") == 0) {
+        pieces.file_path = "./assets/crappy/crappy.png";
+        pieces.tex = LoadTexture(pieces.file_path);
+        pieces.y_white = 0;
+        pieces.y_black = 100;
+        pieces.piece_dim = 100;
+        pieces.rook = 0;
+        pieces.horsey = 100;
+        pieces.bishop = 200;
+        pieces.queen = 300;
+        pieces.king = 400;
+        pieces.pawn = 500;
+    }
+
+    return pieces;
+}
+
+void DrawBoard(Rectangle board, size_t pc_dim) {
+    DrawRectangleLinesEx(board, 5, BLACK);
+    for (size_t i = 1; i <= 8; ++i) {
+        size_t x = board.x + ((i-1) * pc_dim) + (pc_dim/2) - MeasureText("h", LETTER_FONT_SIZE)/2;
+        size_t y = board.y - LETTER_FONT_SIZE - 5;
+        switch (i) {
+            case 1: DrawText("a", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 2: DrawText("b", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 3: DrawText("c", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 4: DrawText("d", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 5: DrawText("e", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 6: DrawText("f", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 7: DrawText("g", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 8: DrawText("h", x, y, LETTER_FONT_SIZE, BLACK); break;
+        }
+    }
+    for (size_t i = 1; i <= 8; ++i) {
+        size_t x = board.x - MeasureText("8", LETTER_FONT_SIZE)*2;
+        size_t y = board.y + ((i-1) * pc_dim) + (pc_dim/2);
+        switch(i) {
+            case 1: DrawText("1", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 2: DrawText("2", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 3: DrawText("3", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 4: DrawText("4", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 5: DrawText("5", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 6: DrawText("6", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 7: DrawText("7", x, y, LETTER_FONT_SIZE, BLACK); break;
+            case 8: DrawText("8", x, y, LETTER_FONT_SIZE, BLACK); break;
+
+        }
+    }
+}
+
 int main(void)
 {
     InitWindow(SW, SH, "Chess");
-
-    const char* crappy_png = "./assets/crappy/crappy.png";
-    Texture2D crappy = LoadTexture(crappy_png);
+    
+    PiecesTexture pieces = GetPiecesTexture("crappy");
 
     Cells cells = {0};
     Rectangle board = CreateBoard();
@@ -106,24 +195,21 @@ int main(void)
         BeginDrawing();
         ClearBackground(GetColor(0xb77e38FF));
 
-        DrawRectangleLinesEx(board, 5, BLACK);
+        DrawBoard(board, cells.items[0].rect.width);
 
         for (size_t i = 0; i < cells.count; ++i) {
           Cell c = cells.items[i];
           DrawRectangleLinesEx(c.rect, 3, black);
-          if (c.is_dark)
+          if (c.is_cell_dark) {
               DrawRectangleRec(c.rect, black);
+          }
+          DrawPiece(c, pieces);
         }
 
-        /*
-        Rectangle src = { .x = 0, .y = 0, .width = CRAPPY_DIM, .height = CRAPPY_DIM };
-        Rectangle dest = { .x = board.x, .y = board.y, .width = cell_dim*0.9, .height = cell_dim*0.9 };
-        DrawTexturePro(crappy, src, dest, Vector2Zero(), 0, WHITE);
-        */
         EndDrawing();
     }
 
-    UnloadTexture(crappy);
+    UnloadTexture(pieces.tex);
     CloseWindow();
     return 0;
 }
