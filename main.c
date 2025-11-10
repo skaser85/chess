@@ -30,6 +30,8 @@ typedef struct {
   size_t row;
   size_t col;
   Piece piece;
+  bool active;
+  bool dragging;
 } Cell;
 
 typedef struct {
@@ -107,7 +109,7 @@ void CreateCells(Rectangle board, Cells* cells) {
     }
 }
 
-void DrawPiece(Cell c, PiecesTexture p) {
+void DrawPiece(Cell c, PiecesTexture p, Vector2 mouse) {
     size_t src_y = c.is_piece_dark ? p.y_black : p.y_white;
     size_t src_x = 0;
     switch (c.piece) {
@@ -179,6 +181,26 @@ void DrawBoard(Rectangle board, size_t pc_dim) {
     }
 }
 
+void DrawCell(Cell* c, Vector2 mouse) {
+    Color black = GetColor(BLACK_SQR_COLOR);
+    c->active = false;
+    DrawRectangleLinesEx(c->rect, 3, black);
+    if (CheckCollisionPointRec(mouse, c->rect)) {
+        float scale = 0.98;
+        float padding = c->rect.width - (c->rect.width*scale);
+        Rectangle r = { 
+            .x = c->rect.x + padding, 
+            .y = c->rect.y + padding, 
+            .width = c->rect.width-(padding*2), 
+            .height = c->rect.height-(padding*2) 
+        };
+        DrawRectangleRec(r, LIME);
+    } else if (c->is_cell_dark) {
+        DrawRectangleRec(c->rect, black); 
+    }
+    
+}
+
 int main(void)
 {
     InitWindow(SW, SH, "Chess");
@@ -188,7 +210,6 @@ int main(void)
     Cells cells = {0};
     Rectangle board = CreateBoard();
     CreateCells(board, &cells);
-    Color black = GetColor(BLACK_SQR_COLOR);
 
     SetTargetFPS(60);
     while (!WindowShouldClose()) {
@@ -197,13 +218,12 @@ int main(void)
 
         DrawBoard(board, cells.items[0].rect.width);
 
+        Vector2 mouse = GetMousePosition();
+
         for (size_t i = 0; i < cells.count; ++i) {
           Cell c = cells.items[i];
-          DrawRectangleLinesEx(c.rect, 3, black);
-          if (c.is_cell_dark) {
-              DrawRectangleRec(c.rect, black);
-          }
-          DrawPiece(c, pieces);
+          DrawCell(&c, mouse);
+          DrawPiece(c, pieces, mouse);
         }
 
         EndDrawing();
