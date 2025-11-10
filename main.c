@@ -21,17 +21,23 @@ typedef enum {
   Bishop,
   Queen,
   King,
+} PieceName;
+
+typedef struct {
+  PieceName name;
+  bool is_dark;
+  size_t value;
+  Vector2 pos;
+  size_t dim;
+  bool is_dragging;
+  Cell* cell;
 } Piece;
 
 typedef struct {
   Rectangle rect;
-  bool is_cell_dark;
-  bool is_piece_dark;
+  bool is_dark;
   size_t row;
   size_t col;
-  Piece piece;
-  bool active;
-  bool dragging;
 } Cell;
 
 typedef struct {
@@ -52,9 +58,9 @@ typedef struct {
     size_t queen;
     size_t king;
     size_t pawn;
-} PiecesTexture;
+} PieceTexture;
 
-size_t GetPieceValue(Piece p) {
+size_t GetPieceValue(PieceName p) {
   switch (p) {
     case Pawn: return 1;
     case Knight:
@@ -84,52 +90,75 @@ void CreateCells(Rectangle board, Cells* cells) {
             Rectangle r = { .x = x, .y = y, .width = cell_dim, .height = cell_dim };
             Cell* c = malloc(sizeof(Cell));
             c->rect = r;
-            c->is_cell_dark = ((row % 2 == 0 && col % 2 == 1) || (row % 2 == 1 && col % 2 == 0));
-            c->is_piece_dark = row == 6 || row == 7;
+            c->is_dark = ((row % 2 == 0 && col % 2 == 1) || (row % 2 == 1 && col % 2 == 0));
             c->row = row;
             c->col = col;
-            c->piece = None;
-            if (row == 0 || row == 7) {
-              if (col == 0 || col == 7) {
-                c->piece = Rook;
-              } else if (col == 1 || col == 6) {
-                c->piece = Knight;
-              } else if (col == 2 || col == 5) {
-                c->piece = Bishop;
-              } else if (col == 3) {
-                c->piece = row == 0 ? Queen : King;
-              } else if (col == 4) {
-                c->piece = row == 0 ? King : Queen;
-              }
-            } else if (row == 1 || row == 6) {
-              c->piece = Pawn;
-            }
             da_append(cells, *c);
         }
     }
 }
 
-void DrawPiece(Cell c, PiecesTexture p, Vector2 mouse) {
-    size_t src_y = c.is_piece_dark ? p.y_black : p.y_white;
+Cell* GetCell(Cells cells, size_t row, size_t col) {
+    for (size_t i = 0; i < cell.items; ++i) {
+      Cell* c = cells.items[i];
+      if (c.row == row && c.col == col)
+          return &c;
+    }
+    return null;
+}
+
+void CreatePieces(Cells cells) {
+    PieceName n;
+
+    Piece* p = malloc(sizeof(Piece));
+    p->is_dragging = 0;
+  
+    Cell* cell = null;
+
+    switch (n) {
+        case Rook: {
+            p->name = Rook;
+            size_t row = 0;
+            size_t col = 0;
+            cell = GetCell(cells, row, col);
+            if (!cell) {
+              nob_log(ERROR, "Could not find a Cell at row %ld col %ld!", row, col);
+              return;
+            }
+        } break;
+    }
+    
+    p->cell = cell;
+    p->dim = cell->rect.width*0.9;
+    size_t padding = c->rect.width - p->dim;
+    Vector2 v = (Vector2)malloc(sizeof(Vector2));
+    v.x = c->rect.x + padding/2;
+    v.y = c->rect.y + padding/2;
+    p->pos = &v;
+
+}
+
+void DrawPiece(Cell c, PieceTexture t, Vector2 mouse) {
+    size_t src_y = c.piece.is_dark ? t.y_black : t.y_white;
     size_t src_x = 0;
-    switch (c.piece) {
+    switch (c.piece.name) {
         case None: return;
-        case Rook: src_x = p.rook; break;
-        case Knight: src_x = p.horsey; break;
-        case Bishop: src_x = p.bishop; break;
-        case Queen: src_x = p.queen; break;
-        case King: src_x = p.king; break;
-        case Pawn: src_x = p.pawn; break;
+        case Rook: src_x = t.rook; break;
+        case Knight: src_x = t.horsey; break;
+        case Bishop: src_x = t.bishop; break;
+        case Queen: src_x = t.queen; break;
+        case King: src_x = t.king; break;
+        case Pawn: src_x = t.pawn; break;
     }
     size_t pc_dim = c.rect.width*0.9;
     size_t padding = c.rect.width - pc_dim;
-    Rectangle src = { .x = src_x, .y = src_y, .width = p.piece_dim, .height = p.piece_dim};
+    Rectangle src = { .x = src_x, .y = src_y, .width = t.piece_dim, .height = t.piece_dim};
     Rectangle dest = { .x = c.rect.x + padding/2, .y = c.rect.y + padding/2, .width = pc_dim, .height = pc_dim };
-    DrawTexturePro(p.tex, src, dest, Vector2Zero(), 0, WHITE);
+    DrawTexturePro(t.tex, src, dest, Vector2Zero(), 0, WHITE);
 }
 
-PiecesTexture GetPiecesTexture(const char* name) { 
-    PiecesTexture pieces = {0};
+PieceTexture GetPieceTexture(const char* name) { 
+    PieceTexture pieces = {0};
     
     if (strcmp(name, "crappy") == 0) {
         pieces.file_path = "./assets/crappy/crappy.png";
@@ -183,7 +212,6 @@ void DrawBoard(Rectangle board, size_t pc_dim) {
 
 void DrawCell(Cell* c, Vector2 mouse) {
     Color black = GetColor(BLACK_SQR_COLOR);
-    c->active = false;
     DrawRectangleLinesEx(c->rect, 3, black);
     if (CheckCollisionPointRec(mouse, c->rect)) {
         float scale = 0.98;
@@ -195,7 +223,7 @@ void DrawCell(Cell* c, Vector2 mouse) {
             .height = c->rect.height-(padding*2) 
         };
         DrawRectangleRec(r, LIME);
-    } else if (c->is_cell_dark) {
+    } else if (c->is_dark) {
         DrawRectangleRec(c->rect, black); 
     }
     
@@ -205,11 +233,13 @@ int main(void)
 {
     InitWindow(SW, SH, "Chess");
     
-    PiecesTexture pieces = GetPiecesTexture("crappy");
+    PieceTexture pieces = GetPieceTexture("crappy");
 
     Cells cells = {0};
     Rectangle board = CreateBoard();
     CreateCells(board, &cells);
+
+    Piece* active_piece = null;
 
     SetTargetFPS(60);
     while (!WindowShouldClose()) {
@@ -223,7 +253,6 @@ int main(void)
         for (size_t i = 0; i < cells.count; ++i) {
           Cell c = cells.items[i];
           DrawCell(&c, mouse);
-          DrawPiece(c, pieces, mouse);
         }
 
         EndDrawing();
