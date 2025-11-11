@@ -24,6 +24,13 @@ typedef enum {
 } PieceName;
 
 typedef struct {
+  Rectangle rect;
+  bool is_dark;
+  size_t row;
+  size_t col;
+} Cell;
+
+typedef struct {
   PieceName name;
   bool is_dark;
   size_t value;
@@ -34,11 +41,10 @@ typedef struct {
 } Piece;
 
 typedef struct {
-  Rectangle rect;
-  bool is_dark;
-  size_t row;
-  size_t col;
-} Cell;
+    Piece* items;
+    size_t count;
+    size_t capacity;
+} Pieces;
 
 typedef struct {
   Cell *items;
@@ -99,49 +105,94 @@ void CreateCells(Rectangle board, Cells* cells) {
 }
 
 Cell* GetCell(Cells cells, size_t row, size_t col) {
-    for (size_t i = 0; i < cell.items; ++i) {
-      Cell* c = cells.items[i];
-      if (c.row == row && c.col == col)
-          return &c;
+    for (size_t i = 0; i < cells.count; ++i) {
+      Cell* c = &cells.items[i];
+      if (c->row == row && c->col == col)
+          return c;
     }
-    return null;
+    return NULL;
 }
 
-void CreatePieces(Cells cells) {
-    PieceName n;
-
-    Piece* p = malloc(sizeof(Piece));
-    p->is_dragging = 0;
-  
-    Cell* cell = null;
-
-    switch (n) {
-        case Rook: {
-            p->name = Rook;
-            size_t row = 0;
-            size_t col = 0;
-            cell = GetCell(cells, row, col);
+void CreatePieces(Pieces* pieces, Cells cells) {
+    for (size_t row = 0; row < 2; ++row) {
+        for (size_t col = 0; col < 8; ++col) {
+            Piece* p = malloc(sizeof(Piece));
+            p->is_dragging = 0;
+            p->is_dark = false;
+            p->name = None;
+            if (row == 0) {
+                if (col == 0 || col == 7) {
+                    p->name = Rook;
+                } else if (col == 1 || col == 6) {
+                    p->name = Knight;
+                } else if (col == 2 || col == 5) {
+                    p->name = Bishop;
+                } else if (col == 3) {
+                    p->name = King;
+                } else {
+                    p->name = Queen;
+                }
+            } else {
+                p->name = Pawn;
+            }
+            Cell* cell = GetCell(cells, row, col);
             if (!cell) {
               nob_log(ERROR, "Could not find a Cell at row %ld col %ld!", row, col);
               return;
-            }
-        } break;
+            } 
+            p->cell = cell;
+            p->dim = cell->rect.width*0.9;
+            size_t padding = cell->rect.width - p->dim;
+            Vector2* v = malloc(sizeof(Vector2));
+            v->x = cell->rect.x + padding/2;
+            v->y = cell->rect.y + padding/2;
+            p->pos = *v;
+            da_append(pieces, *p);
+        }
     }
     
-    p->cell = cell;
-    p->dim = cell->rect.width*0.9;
-    size_t padding = c->rect.width - p->dim;
-    Vector2 v = (Vector2)malloc(sizeof(Vector2));
-    v.x = c->rect.x + padding/2;
-    v.y = c->rect.y + padding/2;
-    p->pos = &v;
-
+    for (size_t row = 7; row > 5; --row) {
+        for (size_t col = 0; col < 8; ++col) {
+            Piece* p = malloc(sizeof(Piece));
+            p->is_dragging = 0;
+            p->is_dark = true;
+            p->name = None;
+            if (row == 7) {
+                if (col == 0 || col == 7) {
+                    p->name = Rook;
+                } else if (col == 1 || col == 6) {
+                    p->name = Knight;
+                } else if (col == 2 || col == 5) {
+                    p->name = Bishop;
+                } else if (col == 3) {
+                    p->name = King;
+                } else {
+                    p->name = Queen;
+                }
+            } else {
+                p->name = Pawn;
+            }
+            Cell* cell = GetCell(cells, row, col);
+            if (!cell) {
+              nob_log(ERROR, "Could not find a Cell at row %ld col %ld!", row, col);
+              return;
+            } 
+            p->cell = cell;
+            p->dim = cell->rect.width*0.9;
+            size_t padding = cell->rect.width - p->dim;
+            Vector2* v = malloc(sizeof(Vector2));
+            v->x = cell->rect.x + padding/2;
+            v->y = cell->rect.y + padding/2;
+            p->pos = *v;
+            da_append(pieces, *p);
+        }
+    }
 }
 
-void DrawPiece(Cell c, PieceTexture t, Vector2 mouse) {
-    size_t src_y = c.piece.is_dark ? t.y_black : t.y_white;
+void DrawPiece(Piece p, PieceTexture t, Vector2 mouse) {
+    size_t src_y = p.is_dark ? t.y_black : t.y_white;
     size_t src_x = 0;
-    switch (c.piece.name) {
+    switch (p.name) {
         case None: return;
         case Rook: src_x = t.rook; break;
         case Knight: src_x = t.horsey; break;
@@ -150,10 +201,10 @@ void DrawPiece(Cell c, PieceTexture t, Vector2 mouse) {
         case King: src_x = t.king; break;
         case Pawn: src_x = t.pawn; break;
     }
-    size_t pc_dim = c.rect.width*0.9;
-    size_t padding = c.rect.width - pc_dim;
+    size_t pc_dim = p.cell->rect.width*0.9;
+    size_t padding = p.cell->rect.width - pc_dim;
     Rectangle src = { .x = src_x, .y = src_y, .width = t.piece_dim, .height = t.piece_dim};
-    Rectangle dest = { .x = c.rect.x + padding/2, .y = c.rect.y + padding/2, .width = pc_dim, .height = pc_dim };
+    Rectangle dest = { .x = p.cell->rect.x + padding/2, .y = p.cell->rect.y + padding/2, .width = pc_dim, .height = pc_dim };
     DrawTexturePro(t.tex, src, dest, Vector2Zero(), 0, WHITE);
 }
 
@@ -231,15 +282,21 @@ void DrawCell(Cell* c, Vector2 mouse) {
 
 int main(void)
 {
+
     InitWindow(SW, SH, "Chess");
-    
-    PieceTexture pieces = GetPieceTexture("crappy");
 
-    Cells cells = {0};
+    PieceTexture pieceTexture = GetPieceTexture("crappy");
+
     Rectangle board = CreateBoard();
+    
+    Cells cells = {0};
     CreateCells(board, &cells);
+    
+    Pieces pieces = {0};
+    CreatePieces(&pieces, cells);
 
-    Piece* active_piece = null;
+
+    Piece* active_piece = NULL;
 
     SetTargetFPS(60);
     while (!WindowShouldClose()) {
@@ -255,10 +312,15 @@ int main(void)
           DrawCell(&c, mouse);
         }
 
+        for (size_t i = 0; i < pieces.count; ++i) {
+            Piece p = pieces.items[i];
+            DrawPiece(p, pieceTexture, mouse);
+        }
+
         EndDrawing();
     }
 
-    UnloadTexture(pieces.tex);
+    UnloadTexture(pieceTexture.tex);
     CloseWindow();
     return 0;
 }
