@@ -28,6 +28,7 @@ typedef struct {
   bool is_dark;
   size_t row;
   size_t col;
+  bool is_active;
 } Cell;
 
 typedef struct {
@@ -104,16 +105,16 @@ void CreateCells(Rectangle board, Cells* cells) {
     }
 }
 
-Cell* GetCell(Cells cells, size_t row, size_t col) {
-    for (size_t i = 0; i < cells.count; ++i) {
-      Cell* c = &cells.items[i];
+Cell* GetCell(Cells* cells, size_t row, size_t col) {
+    for (size_t i = 0; i < cells->count; ++i) {
+      Cell* c = &cells->items[i];
       if (c->row == row && c->col == col)
           return c;
     }
     return NULL;
 }
 
-void CreatePieces(Pieces* pieces, Cells cells) {
+void CreatePieces(Pieces* pieces, Cells* cells) {
     for (size_t row = 0; row < 2; ++row) {
         for (size_t col = 0; col < 8; ++col) {
             Piece* p = malloc(sizeof(Piece));
@@ -154,7 +155,7 @@ void CreatePieces(Pieces* pieces, Cells cells) {
     for (size_t row = 7; row > 5; --row) {
         for (size_t col = 0; col < 8; ++col) {
             Piece* p = malloc(sizeof(Piece));
-            p->is_dragging = 0;
+            p->is_dragging = false;
             p->is_dark = true;
             p->name = None;
             if (row == 7) {
@@ -169,8 +170,7 @@ void CreatePieces(Pieces* pieces, Cells cells) {
                 } else {
                     p->name = Queen;
                 }
-            } else {
-                p->name = Pawn;
+            } else { p->name = Pawn;
             }
             Cell* cell = GetCell(cells, row, col);
             if (!cell) {
@@ -189,10 +189,10 @@ void CreatePieces(Pieces* pieces, Cells cells) {
     }
 }
 
-void DrawPiece(Piece p, PieceTexture t, Vector2 mouse) {
-    size_t src_y = p.is_dark ? t.y_black : t.y_white;
+void DrawPiece(Piece* p, PieceTexture t, Vector2 mouse) {
+    size_t src_y = p->is_dark ? t.y_black : t.y_white;
     size_t src_x = 0;
-    switch (p.name) {
+    switch (p->name) {
         case None: return;
         case Rook: src_x = t.rook; break;
         case Knight: src_x = t.horsey; break;
@@ -201,10 +201,38 @@ void DrawPiece(Piece p, PieceTexture t, Vector2 mouse) {
         case King: src_x = t.king; break;
         case Pawn: src_x = t.pawn; break;
     }
-    size_t pc_dim = p.cell->rect.width*0.9;
-    size_t padding = p.cell->rect.width - pc_dim;
+    
+    size_t pc_dim = p->cell->rect.width*0.9;
+    size_t padding = p->cell->rect.width - pc_dim;
+    
+    bool pressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    Rectangle r = { .x = p->pos.x, .y = p->pos.y, .width = t.piece_dim, .height = t.piece_dim };
+    bool hovered = CheckCollisionPointRec(mouse, r);
+    if (pressed && p->cell->row == 0 && p->cell->col == 0) {
+        nob_log(INFO, "mouse button left pressed %d", p->name);
+        nob_log(INFO, "cell->is_active %b %ld %ld", p->cell->is_active, p->cell->row, p->cell->col);
+        nob_log(INFO, "p->is_dragging %b", p->is_dragging);
+    }
+    if (hovered && pressed && !p->is_dragging) {
+        p->is_dragging = true;
+    }
+    if (p->is_dragging) {
+      if (pressed) {
+        p->is_dragging = false;
+      }
+    }
+    if (p->is_dragging) {
+      nob_log(INFO, "dragging %d", p->name);
+      p->pos.x = mouse.x;
+      p->pos.y = mouse.y;
+    } else {
+        p->pos.x = p->cell->rect.x + padding/2;
+        p->pos.y = p->cell->rect.y + padding/2;
+    }
+    
     Rectangle src = { .x = src_x, .y = src_y, .width = t.piece_dim, .height = t.piece_dim};
-    Rectangle dest = { .x = p.cell->rect.x + padding/2, .y = p.cell->rect.y + padding/2, .width = pc_dim, .height = pc_dim };
+    Rectangle dest = { .x = p->pos.x, .y = p->pos.y, .width = pc_dim, .height = pc_dim };
+    
     DrawTexturePro(t.tex, src, dest, Vector2Zero(), 0, WHITE);
 }
 
@@ -264,7 +292,8 @@ void DrawBoard(Rectangle board, size_t pc_dim) {
 void DrawCell(Cell* c, Vector2 mouse) {
     Color black = GetColor(BLACK_SQR_COLOR);
     DrawRectangleLinesEx(c->rect, 3, black);
-    if (CheckCollisionPointRec(mouse, c->rect)) {
+    c->is_active = CheckCollisionPointRec(mouse, c->rect);
+    if (c->is_active) {
         float scale = 0.98;
         float padding = c->rect.width - (c->rect.width*scale);
         Rectangle r = { 
@@ -274,8 +303,10 @@ void DrawCell(Cell* c, Vector2 mouse) {
             .height = c->rect.height-(padding*2) 
         };
         DrawRectangleRec(r, LIME);
+        if (c->row == 0 && c->col == 0)
+            nob_log(INFO, "active %ld %ld", c->row, c->col);
     } else if (c->is_dark) {
-        DrawRectangleRec(c->rect, black); 
+        DrawRectangleRec(c->rect, black);
     }
     
 }
@@ -293,7 +324,7 @@ int main(void)
     CreateCells(board, &cells);
     
     Pieces pieces = {0};
-    CreatePieces(&pieces, cells);
+    CreatePieces(&pieces, &cells);
 
 
     Piece* active_piece = NULL;
@@ -314,7 +345,7 @@ int main(void)
 
         for (size_t i = 0; i < pieces.count; ++i) {
             Piece p = pieces.items[i];
-            DrawPiece(p, pieceTexture, mouse);
+            DrawPiece(&p, pieceTexture, mouse);
         }
 
         EndDrawing();
