@@ -100,6 +100,7 @@ void CreateCells(Rectangle board, Cells* cells) {
             c->is_dark = ((row % 2 == 0 && col % 2 == 1) || (row % 2 == 1 && col % 2 == 0));
             c->row = row;
             c->col = col;
+            c->is_active = false;
             da_append(cells, *c);
         }
     }
@@ -189,7 +190,7 @@ void CreatePieces(Pieces* pieces, Cells* cells) {
     }
 }
 
-void DrawPiece(Piece* p, PieceTexture t, Vector2 mouse) {
+void DrawPiece(Piece* p, PieceTexture t, Vector2 mouse, Piece* active_piece) {
     size_t src_y = p->is_dark ? t.y_black : t.y_white;
     size_t src_x = 0;
     switch (p->name) {
@@ -207,29 +208,23 @@ void DrawPiece(Piece* p, PieceTexture t, Vector2 mouse) {
     
     bool pressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
     Rectangle r = { .x = p->pos.x, .y = p->pos.y, .width = t.piece_dim, .height = t.piece_dim };
-    bool hovered = CheckCollisionPointRec(mouse, r);
-    if (pressed && p->cell->row == 0 && p->cell->col == 0) {
-        nob_log(INFO, "mouse button left pressed %d", p->name);
-        nob_log(INFO, "cell->is_active %b %ld %ld", p->cell->is_active, p->cell->row, p->cell->col);
-        nob_log(INFO, "p->is_dragging %b", p->is_dragging);
-    }
-    if (hovered && pressed && !p->is_dragging) {
-        p->is_dragging = true;
-    }
-    if (p->is_dragging) {
-      if (pressed) {
-        p->is_dragging = false;
-      }
-    }
-    if (p->is_dragging) {
-      nob_log(INFO, "dragging %d", p->name);
-      p->pos.x = mouse.x;
-      p->pos.y = mouse.y;
+    if (!active_piece) {
+        if (!p->is_dragging) {
+            bool hovered = CheckCollisionPointRec(mouse, r);
+            if (hovered) {
+                p->is_dragging = true;
+                active_piece = p;
+            }
+        }
     } else {
+      active_piece->pos.x = mouse.x - (t.piece_dim/2);
+      active_piece->pos.y = mouse.y - (t.piece_dim/2);
+    }
+    if (!p->is_dragging) {
         p->pos.x = p->cell->rect.x + padding/2;
         p->pos.y = p->cell->rect.y + padding/2;
     }
-    
+
     Rectangle src = { .x = src_x, .y = src_y, .width = t.piece_dim, .height = t.piece_dim};
     Rectangle dest = { .x = p->pos.x, .y = p->pos.y, .width = pc_dim, .height = pc_dim };
     
@@ -292,8 +287,8 @@ void DrawBoard(Rectangle board, size_t pc_dim) {
 void DrawCell(Cell* c, Vector2 mouse) {
     Color black = GetColor(BLACK_SQR_COLOR);
     DrawRectangleLinesEx(c->rect, 3, black);
-    c->is_active = CheckCollisionPointRec(mouse, c->rect);
-    if (c->is_active) {
+    if (CheckCollisionPointRec(mouse, c->rect)) {
+        c->is_active = true;
         float scale = 0.98;
         float padding = c->rect.width - (c->rect.width*scale);
         Rectangle r = { 
@@ -303,10 +298,10 @@ void DrawCell(Cell* c, Vector2 mouse) {
             .height = c->rect.height-(padding*2) 
         };
         DrawRectangleRec(r, LIME);
-        if (c->row == 0 && c->col == 0)
-            nob_log(INFO, "active %ld %ld", c->row, c->col);
-    } else if (c->is_dark) {
-        DrawRectangleRec(c->rect, black);
+    } else {
+        c->is_active = false;
+        if (c->is_dark) 
+          DrawRectangleRec(c->rect, black);
     }
     
 }
@@ -345,7 +340,7 @@ int main(void)
 
         for (size_t i = 0; i < pieces.count; ++i) {
             Piece p = pieces.items[i];
-            DrawPiece(&p, pieceTexture, mouse);
+            DrawPiece(&p, pieceTexture, mouse, active_piece);
         }
 
         EndDrawing();
