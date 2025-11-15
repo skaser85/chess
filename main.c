@@ -24,22 +24,20 @@ typedef enum {
 } PieceName;
 
 typedef struct {
+  PieceName name;
+  bool is_dark;
+  size_t value;
+} Piece;
+
+typedef struct {
   Rectangle rect;
   bool is_dark;
   size_t row;
   size_t col;
   bool is_active;
+  Rectangle active_rect;
+  Piece* piece;
 } Cell;
-
-typedef struct {
-  PieceName name;
-  bool is_dark;
-  size_t value;
-  Vector2 pos;
-  size_t dim;
-  bool is_dragging;
-  Cell* cell;
-} Piece;
 
 typedef struct {
     Piece* items;
@@ -101,6 +99,17 @@ void CreateCells(Rectangle board, Cells* cells) {
             c->row = row;
             c->col = col;
             c->is_active = false;
+            float scale = 0.98;
+            float padding = c->rect.width - (c->rect.width*scale);
+            Rectangle ar = { 
+                .x = c->rect.x + padding, 
+                .y = c->rect.y + padding, 
+                .width = c->rect.width-(padding*2), 
+                .height = c->rect.height-(padding*2) 
+            };
+            c->active_rect = ar;
+            c->piece = (Piece*)malloc(sizeof(Piece));
+            c->piece->name = None;
             da_append(cells, *c);
         }
     }
@@ -115,11 +124,15 @@ Cell* GetCell(Cells* cells, size_t row, size_t col) {
     return NULL;
 }
 
-void CreatePieces(Pieces* pieces, Cells* cells) {
+void CreatePieces(Cells* cells) {
     for (size_t row = 0; row < 2; ++row) {
         for (size_t col = 0; col < 8; ++col) {
-            Piece* p = malloc(sizeof(Piece));
-            p->is_dragging = 0;
+            Cell* cell = GetCell(cells, row, col);
+            if (!cell) {
+              nob_log(ERROR, "Could not find a Cell at row %ld col %ld!", row, col);
+              return;
+            }
+            Piece* p = cell->piece;
             p->is_dark = false;
             p->name = None;
             if (row == 0) {
@@ -137,26 +150,17 @@ void CreatePieces(Pieces* pieces, Cells* cells) {
             } else {
                 p->name = Pawn;
             }
-            Cell* cell = GetCell(cells, row, col);
-            if (!cell) {
-              nob_log(ERROR, "Could not find a Cell at row %ld col %ld!", row, col);
-              return;
-            } 
-            p->cell = cell;
-            p->dim = cell->rect.width*0.9;
-            size_t padding = cell->rect.width - p->dim;
-            Vector2* v = malloc(sizeof(Vector2));
-            v->x = cell->rect.x + padding/2;
-            v->y = cell->rect.y + padding/2;
-            p->pos = *v;
-            da_append(pieces, *p);
         }
     }
     
     for (size_t row = 7; row > 5; --row) {
         for (size_t col = 0; col < 8; ++col) {
-            Piece* p = malloc(sizeof(Piece));
-            p->is_dragging = false;
+            Cell* cell = GetCell(cells, row, col);
+            if (!cell) {
+              nob_log(ERROR, "Could not find a Cell at row %ld col %ld!", row, col);
+              return;
+            }
+            Piece* p = cell->piece; 
             p->is_dark = true;
             p->name = None;
             if (row == 7) {
@@ -171,71 +175,18 @@ void CreatePieces(Pieces* pieces, Cells* cells) {
                 } else {
                     p->name = Queen;
                 }
-            } else { p->name = Pawn;
-            }
-            Cell* cell = GetCell(cells, row, col);
-            if (!cell) {
-              nob_log(ERROR, "Could not find a Cell at row %ld col %ld!", row, col);
-              return;
-            } 
-            p->cell = cell;
-            p->dim = cell->rect.width*0.9;
-            size_t padding = cell->rect.width - p->dim;
-            Vector2* v = malloc(sizeof(Vector2));
-            v->x = cell->rect.x + padding/2;
-            v->y = cell->rect.y + padding/2;
-            p->pos = *v;
-            da_append(pieces, *p);
-        }
-    }
-}
-
-void DrawPiece(Piece* p, PieceTexture t, Vector2 mouse, Piece* active_piece) {
-    size_t src_y = p->is_dark ? t.y_black : t.y_white;
-    size_t src_x = 0;
-    switch (p->name) {
-        case None: return;
-        case Rook: src_x = t.rook; break;
-        case Knight: src_x = t.horsey; break;
-        case Bishop: src_x = t.bishop; break;
-        case Queen: src_x = t.queen; break;
-        case King: src_x = t.king; break;
-        case Pawn: src_x = t.pawn; break;
-    }
-    
-    size_t pc_dim = p->cell->rect.width*0.9;
-    size_t padding = p->cell->rect.width - pc_dim;
-    
-    bool pressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
-    Rectangle r = { .x = p->pos.x, .y = p->pos.y, .width = t.piece_dim, .height = t.piece_dim };
-    if (!active_piece) {
-        if (!p->is_dragging) {
-            bool hovered = CheckCollisionPointRec(mouse, r);
-            if (hovered) {
-                p->is_dragging = true;
-                active_piece = p;
+            } else {
+                p->name = Pawn;
             }
         }
-    } else {
-      active_piece->pos.x = mouse.x - (t.piece_dim/2);
-      active_piece->pos.y = mouse.y - (t.piece_dim/2);
     }
-    if (!p->is_dragging) {
-        p->pos.x = p->cell->rect.x + padding/2;
-        p->pos.y = p->cell->rect.y + padding/2;
-    }
-
-    Rectangle src = { .x = src_x, .y = src_y, .width = t.piece_dim, .height = t.piece_dim};
-    Rectangle dest = { .x = p->pos.x, .y = p->pos.y, .width = pc_dim, .height = pc_dim };
-    
-    DrawTexturePro(t.tex, src, dest, Vector2Zero(), 0, WHITE);
 }
 
 PieceTexture GetPieceTexture(const char* name) { 
     PieceTexture pieces = {0};
     
-    if (strcmp(name, "crappy") == 0) {
-        pieces.file_path = "./assets/crappy/crappy.png";
+    if (strcmp(name, "derpy") == 0) {
+        pieces.file_path = "./assets/derpy/derpy.png";
         pieces.tex = LoadTexture(pieces.file_path);
         pieces.y_white = 0;
         pieces.y_black = 100;
@@ -284,26 +235,55 @@ void DrawBoard(Rectangle board, size_t pc_dim) {
     }
 }
 
-void DrawCell(Cell* c, Vector2 mouse) {
+void DrawCell(Cell* c, Vector2 mouse, bool pressed, Cell* active_cell) {
     Color black = GetColor(BLACK_SQR_COLOR);
-    DrawRectangleLinesEx(c->rect, 3, black);
+    Color color = black;
     if (CheckCollisionPointRec(mouse, c->rect)) {
-        c->is_active = true;
-        float scale = 0.98;
-        float padding = c->rect.width - (c->rect.width*scale);
-        Rectangle r = { 
-            .x = c->rect.x + padding, 
-            .y = c->rect.y + padding, 
-            .width = c->rect.width-(padding*2), 
-            .height = c->rect.height-(padding*2) 
-        };
-        DrawRectangleRec(r, LIME);
-    } else {
-        c->is_active = false;
-        if (c->is_dark) 
-          DrawRectangleRec(c->rect, black);
+        if (pressed) {
+            if (c->is_active) {
+                c->is_active = false;
+            } else {
+                if (active_cell && c != active_cell) {
+                    Piece* temp = active_cell->piece;
+                    active_cell->piece = c->piece;
+                    c->piece = temp;
+                    active_cell->is_active = false;
+                    active_cell = NULL;
+                } else {
+                    c->is_active = true;
+                    active_cell = c;
+                }
+            }
+        }
+        color = LIME;
+    }
+    if (c->is_active)
+        DrawRectangleRec(c->active_rect, PINK);
+    else if (c->is_dark) 
+      DrawRectangleRec(c->rect, black); 
+    DrawRectangleLinesEx(c->rect, 3, color);
+}
+
+void DrawPiece(Cell* c, PieceTexture t) {
+    size_t src_y = c->piece->is_dark ? t.y_black : t.y_white;
+    size_t src_x = 0;
+    switch (c->piece->name) {
+        case None: return;
+        case Rook: src_x = t.rook; break;
+        case Knight: src_x = t.horsey; break;
+        case Bishop: src_x = t.bishop; break;
+        case Queen: src_x = t.queen; break;
+        case King: src_x = t.king; break;
+        case Pawn: src_x = t.pawn; break;
     }
     
+    size_t pc_dim = c->rect.width*0.9;
+    size_t padding = c->rect.width - pc_dim;
+    
+    Rectangle src = { .x = src_x, .y = src_y, .width = t.piece_dim, .height = t.piece_dim};
+    Rectangle dest = { .x = c->rect.x+(padding/2), .y = c->rect.y+(padding/2), .width = pc_dim, .height = pc_dim };
+    
+    DrawTexturePro(t.tex, src, dest, Vector2Zero(), 0, WHITE);
 }
 
 int main(void)
@@ -311,18 +291,15 @@ int main(void)
 
     InitWindow(SW, SH, "Chess");
 
-    PieceTexture pieceTexture = GetPieceTexture("crappy");
+    PieceTexture pieceTexture = GetPieceTexture("derpy");
 
     Rectangle board = CreateBoard();
     
     Cells cells = {0};
     CreateCells(board, &cells);
-    
-    Pieces pieces = {0};
-    CreatePieces(&pieces, &cells);
+    CreatePieces(&cells);
 
-
-    Piece* active_piece = NULL;
+    Cell* active_cell = NULL;
 
     SetTargetFPS(60);
     while (!WindowShouldClose()) {
@@ -332,15 +309,18 @@ int main(void)
         DrawBoard(board, cells.items[0].rect.width);
 
         Vector2 mouse = GetMousePosition();
+        bool left_mouse_button_pressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 
         for (size_t i = 0; i < cells.count; ++i) {
-          Cell c = cells.items[i];
-          DrawCell(&c, mouse);
-        }
-
-        for (size_t i = 0; i < pieces.count; ++i) {
-            Piece p = pieces.items[i];
-            DrawPiece(&p, pieceTexture, mouse, active_piece);
+          Cell* c = &cells.items[i];
+          DrawCell(c, mouse, left_mouse_button_pressed, active_cell);
+          if (c->is_active) {
+              active_cell = c;
+          } else {
+            if (c == active_cell)
+                active_cell = NULL;
+          }
+          DrawPiece(c, pieceTexture);
         }
 
         EndDrawing();
