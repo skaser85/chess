@@ -197,6 +197,18 @@ PieceTexture GetPieceTexture(const char* name) {
         pieces.queen = 300;
         pieces.king = 400;
         pieces.pawn = 500;
+    } else if (strcmp(name, "pixelated") == 0) {
+        pieces.file_path = "./assets/pixelated/pixelated.png";
+        pieces.tex = LoadTexture(pieces.file_path);
+        pieces.y_white = 64;
+        pieces.y_black = 0;
+        pieces.piece_dim = 64;
+        pieces.rook = 0;
+        pieces.horsey = 64;
+        pieces.bishop = 128;
+        pieces.queen = 192;
+        pieces.king = 256;
+        pieces.pawn = 320;
     }
 
     return pieces;
@@ -291,8 +303,8 @@ int main(void)
 
     InitWindow(SW, SH, "Chess");
 
-    PieceTexture pieceTexture = GetPieceTexture("derpy");
-
+    //PieceTexture pieceTexture = GetPieceTexture("derpy");
+    PieceTexture pieceTexture = GetPieceTexture("pixelated");
     Rectangle board = CreateBoard();
     
     Cells cells = {0};
