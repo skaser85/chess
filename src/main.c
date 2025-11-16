@@ -4,7 +4,9 @@
 
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
-#include "./nob.h"
+#include "../nob.h"
+
+#define ASSETS_DIR "./assets/"
 
 //#define SW 1200
 //#define SH 720
@@ -12,6 +14,9 @@
 #define SH 1080
 #define BLACK_SQR_COLOR 0x1c1916ff
 #define LETTER_FONT_SIZE 40
+
+typedef struct Cell Cell;
+typedef struct Cells Cells;
 
 typedef enum {
   None,
@@ -21,23 +26,15 @@ typedef enum {
   Bishop,
   Queen,
   King,
-} PieceName;
+} PieceKind;
 
 typedef struct {
-  PieceName name;
+  PieceKind kind;
   bool is_dark;
   size_t value;
+  bool first_move_made;
+  Cells* valid_moves;
 } Piece;
-
-typedef struct {
-  Rectangle rect;
-  bool is_dark;
-  size_t row;
-  size_t col;
-  bool is_active;
-  Rectangle active_rect;
-  Piece* piece;
-} Cell;
 
 typedef struct {
     Piece* items;
@@ -45,11 +42,21 @@ typedef struct {
     size_t capacity;
 } Pieces;
 
-typedef struct {
+struct Cell {
+  Rectangle rect;
+  bool is_dark;
+  size_t row;
+  size_t col;
+  bool is_active;
+  Rectangle active_rect;
+  Piece* piece;
+};
+
+struct Cells {
   Cell *items;
   size_t count;
   size_t capacity;
-} Cells;
+};
 
 typedef struct {
     const char* file_path;
@@ -65,7 +72,7 @@ typedef struct {
     size_t pawn;
 } PieceTexture;
 
-size_t GetPieceValue(PieceName p) {
+size_t GetPieceValue(PieceKind p) {
   switch (p) {
     case Pawn: return 1;
     case Knight:
@@ -109,7 +116,8 @@ void CreateCells(Rectangle board, Cells* cells) {
             };
             c->active_rect = ar;
             c->piece = (Piece*)malloc(sizeof(Piece));
-            c->piece->name = None;
+            c->piece->kind = None;
+            c->piece->valid_moves = NULL;
             da_append(cells, *c);
         }
     }
@@ -134,21 +142,21 @@ void CreatePieces(Cells* cells) {
             }
             Piece* p = cell->piece;
             p->is_dark = false;
-            p->name = None;
+            p->kind = None;
             if (row == 0) {
                 if (col == 0 || col == 7) {
-                    p->name = Rook;
+                    p->kind = Rook;
                 } else if (col == 1 || col == 6) {
-                    p->name = Knight;
+                    p->kind = Knight;
                 } else if (col == 2 || col == 5) {
-                    p->name = Bishop;
+                    p->kind = Bishop;
                 } else if (col == 3) {
-                    p->name = King;
+                    p->kind = King;
                 } else {
-                    p->name = Queen;
+                    p->kind = Queen;
                 }
             } else {
-                p->name = Pawn;
+                p->kind = Pawn;
             }
         }
     }
@@ -162,31 +170,31 @@ void CreatePieces(Cells* cells) {
             }
             Piece* p = cell->piece; 
             p->is_dark = true;
-            p->name = None;
+            p->kind = None;
             if (row == 7) {
                 if (col == 0 || col == 7) {
-                    p->name = Rook;
+                    p->kind = Rook;
                 } else if (col == 1 || col == 6) {
-                    p->name = Knight;
+                    p->kind = Knight;
                 } else if (col == 2 || col == 5) {
-                    p->name = Bishop;
+                    p->kind = Bishop;
                 } else if (col == 3) {
-                    p->name = King;
+                    p->kind = King;
                 } else {
-                    p->name = Queen;
+                    p->kind = Queen;
                 }
             } else {
-                p->name = Pawn;
+                p->kind = Pawn;
             }
         }
     }
 }
 
-PieceTexture GetPieceTexture(const char* name) { 
+PieceTexture GetPieceTexture(const char* kind) { 
     PieceTexture pieces = {0};
     
-    if (strcmp(name, "derpy") == 0) {
-        pieces.file_path = "./assets/derpy/derpy.png";
+    if (strcmp(kind, "derpy") == 0) {
+        pieces.file_path = ASSETS_DIR"derpy/derpy.png";
         pieces.tex = LoadTexture(pieces.file_path);
         pieces.y_white = 0;
         pieces.y_black = 100;
@@ -197,8 +205,8 @@ PieceTexture GetPieceTexture(const char* name) {
         pieces.queen = 300;
         pieces.king = 400;
         pieces.pawn = 500;
-    } else if (strcmp(name, "pixelated") == 0) {
-        pieces.file_path = "./assets/pixelated/pixelated.png";
+    } else if (strcmp(kind, "pixelated") == 0) {
+        pieces.file_path = ASSETS_DIR"pixelated/pixelated.png";
         pieces.tex = LoadTexture(pieces.file_path);
         pieces.y_white = 64;
         pieces.y_black = 0;
@@ -276,10 +284,37 @@ void DrawCell(Cell* c, Vector2 mouse, bool pressed, Cell* active_cell) {
     DrawRectangleLinesEx(c->rect, 3, color);
 }
 
+void AddValidMoves(Cells* cells, Cell* c) {
+    c->piece->valid_moves = (Cells*)malloc(sizeof(Cells));
+    switch (c->piece->kind) {
+        case None: return;
+        case Pawn: {
+            if (c->row < 7) {
+                Cell* v = GetCell(cells, c->row+1, c->col);
+                if (!v) {
+                    nob_log(ERROR, "Could not get a cell at row %ld and col %ld", c->row+1, c->col);
+                    exit(1);
+                }
+                da_append(c->piece->valid_moves, *v);
+                if (!c->piece->first_move_made) {
+                    v = GetCell(cells, c->row+2, c->col);
+                    if (!v) {
+                        nob_log(ERROR, "Could not get a cell at row %ld and col %ld", c->row+2, c->col);
+                        exit(1);
+                    }
+                    da_append(c->piece->valid_moves, *v);
+                }
+            }
+        } break;
+        default: return;
+    }
+}
+
+
 void DrawPiece(Cell* c, PieceTexture t) {
     size_t src_y = c->piece->is_dark ? t.y_black : t.y_white;
     size_t src_x = 0;
-    switch (c->piece->name) {
+    switch (c->piece->kind) {
         case None: return;
         case Rook: src_x = t.rook; break;
         case Knight: src_x = t.horsey; break;
@@ -328,6 +363,15 @@ int main(void)
           DrawCell(c, mouse, left_mouse_button_pressed, active_cell);
           if (c->is_active) {
               active_cell = c;
+              if (c->piece->valid_moves)
+                  free(c->piece->valid_moves);
+              AddValidMoves(&cells, c);
+              if (c->piece->valid_moves && c->piece->valid_moves->count > 0) {
+                for (size_t m = 0; m < c->piece->valid_moves->count; ++m) {
+                    Cell v = c->piece->valid_moves->items[m];
+                    DrawRectangleRec(v.active_rect, BLUE);
+                }
+              }
           } else {
             if (c == active_cell)
                 active_cell = NULL;
