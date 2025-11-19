@@ -117,7 +117,7 @@ void CreateCells(Rectangle board, Cells* cells) {
             c->active_rect = ar;
             c->piece = (Piece*)malloc(sizeof(Piece));
             c->piece->kind = None;
-            c->piece->valid_moves = NULL;
+            c->piece->valid_moves = malloc(sizeof(Cells));
             da_append(cells, *c);
         }
     }
@@ -285,7 +285,7 @@ void DrawCell(Cell* c, Vector2 mouse, bool pressed, Cell* active_cell) {
 }
 
 void AddValidMoves(Cells* cells, Cell* c) {
-    c->piece->valid_moves = (Cells*)malloc(sizeof(Cells));
+    c->piece->valid_moves->count = 0;
     switch (c->piece->kind) {
         case None: return;
         case Pawn: {
