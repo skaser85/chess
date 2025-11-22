@@ -12,7 +12,7 @@
 //#define SH 720
 #define SW 1920
 #define SH 1080
-#define BLACK_SQR_COLOR 0x1c1916ff
+#define BLACK_SQR_COLOR 0x404040ff
 #define LETTER_FONT_SIZE 40
 
 typedef struct Cell Cell;
@@ -32,8 +32,7 @@ typedef struct {
   PieceKind kind;
   bool is_dark;
   size_t value;
-  bool first_move_made;
-  Cells* valid_moves;
+  struct Cells* moves;
 } Piece;
 
 typedef struct {
@@ -57,6 +56,7 @@ struct Cells {
   size_t count;
   size_t capacity;
 };
+
 
 typedef struct {
     const char* file_path;
@@ -117,7 +117,6 @@ void CreateCells(Rectangle board, Cells* cells) {
             c->active_rect = ar;
             c->piece = (Piece*)malloc(sizeof(Piece));
             c->piece->kind = None;
-            c->piece->valid_moves = malloc(sizeof(Cells));
             da_append(cells, *c);
         }
     }
@@ -141,6 +140,8 @@ void CreatePieces(Cells* cells) {
               return;
             }
             Piece* p = cell->piece;
+            p->moves = (Cells*)malloc(sizeof(Cells));
+            memset(p->moves, 0, sizeof(Cells));
             p->is_dark = false;
             p->kind = None;
             if (row == 0) {
@@ -169,6 +170,8 @@ void CreatePieces(Cells* cells) {
               return;
             }
             Piece* p = cell->piece; 
+            p->moves = (Cells*)malloc(sizeof(Cells));
+            memset(p->moves, 0, sizeof(Cells));
             p->is_dark = true;
             p->kind = None;
             if (row == 7) {
@@ -217,6 +220,30 @@ PieceTexture GetPieceTexture(const char* kind) {
         pieces.queen = 192;
         pieces.king = 256;
         pieces.pawn = 320;
+    } else if (strcmp(kind, "drawn") == 0) {
+        pieces.file_path = ASSETS_DIR"drawn/drawn.png";
+        pieces.tex = LoadTexture(pieces.file_path);
+        pieces.y_white = 500;
+        pieces.y_black = 0;
+        pieces.piece_dim = 500;
+        pieces.rook = 2500;
+        pieces.horsey = 1000;
+        pieces.bishop = 0;
+        pieces.queen = 2000;
+        pieces.king = 500;
+        pieces.pawn = 1500;
+    } else if (strcmp(kind, "vector") == 0) {
+        pieces.file_path = ASSETS_DIR"vector/vector.png";
+        pieces.tex = LoadTexture(pieces.file_path);
+        pieces.y_white = 0;
+        pieces.y_black = 100;
+        pieces.piece_dim = 100;
+        pieces.rook = 200;
+        pieces.horsey = 300;
+        pieces.bishop = 400;
+        pieces.queen = 100;
+        pieces.king = 0;
+        pieces.pawn = 500;
     }
 
     return pieces;
@@ -262,13 +289,16 @@ void DrawCell(Cell* c, Vector2 mouse, bool pressed, Cell* active_cell) {
         if (pressed) {
             if (c->is_active) {
                 c->is_active = false;
+                active_cell = NULL;
             } else {
-                if (active_cell && c != active_cell) {
-                    Piece* temp = active_cell->piece;
-                    active_cell->piece = c->piece;
-                    c->piece = temp;
-                    active_cell->is_active = false;
-                    active_cell = NULL;
+                if (active_cell) {
+                    if (c != active_cell) {
+                        Piece* temp = active_cell->piece;
+                        active_cell->piece = c->piece;
+                        c->piece = temp;
+                        active_cell->is_active = false;
+                        active_cell = NULL;
+                    }
                 } else {
                     c->is_active = true;
                     active_cell = c;
@@ -277,32 +307,50 @@ void DrawCell(Cell* c, Vector2 mouse, bool pressed, Cell* active_cell) {
         }
         color = LIME;
     }
-    if (c->is_active)
+    if (c->is_dark)
+        DrawRectangleRec(c->rect, black);
+    if (c->is_active) 
         DrawRectangleRec(c->active_rect, PINK);
-    else if (c->is_dark) 
-      DrawRectangleRec(c->rect, black); 
     DrawRectangleLinesEx(c->rect, 3, color);
 }
 
 void AddValidMoves(Cells* cells, Cell* c) {
-    c->piece->valid_moves->count = 0;
     switch (c->piece->kind) {
         case None: return;
         case Pawn: {
-            if (c->row < 7) {
-                Cell* v = GetCell(cells, c->row+1, c->col);
-                if (!v) {
-                    nob_log(ERROR, "Could not get a cell at row %ld and col %ld", c->row+1, c->col);
-                    exit(1);
-                }
-                da_append(c->piece->valid_moves, *v);
-                if (!c->piece->first_move_made) {
-                    v = GetCell(cells, c->row+2, c->col);
+            if (c->piece->is_dark) {
+                if (c->row > 0) {
+                    Cell* v = GetCell(cells, c->row-1, c->col);
                     if (!v) {
-                        nob_log(ERROR, "Could not get a cell at row %ld and col %ld", c->row+2, c->col);
+                        nob_log(ERROR, "Could not get a cell at row %ld and col %ld", c->row-1, c->col);
                         exit(1);
                     }
-                    da_append(c->piece->valid_moves, *v);
+                    DrawRectangleRec(v->active_rect, BLUE);
+                    if (c->piece->moves->count == 0) {
+                        Cell* v = GetCell(cells, c->row-2, c->col);
+                        if (!v) {
+                            nob_log(ERROR, "Could not get a cell at row %ld and col %ld", c->row-2, c->col);
+                            exit(1);
+                        }
+                        DrawRectangleRec(v->active_rect, BLUE);
+                    }
+                }
+            } else {
+                if (c->row < 7) {
+                    Cell* v = GetCell(cells, c->row+1, c->col);
+                    if (!v) {
+                        nob_log(ERROR, "Could not get a cell at row %ld and col %ld", c->row+1, c->col);
+                        exit(1);
+                    }
+                    DrawRectangleRec(v->active_rect, BLUE);
+                    if (c->piece->moves->count == 0) {
+                        Cell* v = GetCell(cells, c->row+2, c->col);
+                        if (!v) {
+                            nob_log(ERROR, "Could not get a cell at row %ld and col %ld", c->row+2, c->col);
+                            exit(1);
+                        }
+                        DrawRectangleRec(v->active_rect, BLUE);
+                    }
                 }
             }
         } break;
@@ -339,7 +387,9 @@ int main(void)
     InitWindow(SW, SH, "Chess");
 
     //PieceTexture pieceTexture = GetPieceTexture("derpy");
-    PieceTexture pieceTexture = GetPieceTexture("pixelated");
+    //PieceTexture pieceTexture = GetPieceTexture("pixelated");
+    //PieceTexture pieceTexture = GetPieceTexture("drawn");
+    PieceTexture pieceTexture = GetPieceTexture("vector");
     Rectangle board = CreateBoard();
     
     Cells cells = {0};
@@ -351,7 +401,7 @@ int main(void)
     SetTargetFPS(60);
     while (!WindowShouldClose()) {
         BeginDrawing();
-        ClearBackground(GetColor(0xb77e38FF));
+        ClearBackground(GetColor(0xc7a753FF));
 
         DrawBoard(board, cells.items[0].rect.width);
 
@@ -363,15 +413,7 @@ int main(void)
           DrawCell(c, mouse, left_mouse_button_pressed, active_cell);
           if (c->is_active) {
               active_cell = c;
-              if (c->piece->valid_moves)
-                  free(c->piece->valid_moves);
               AddValidMoves(&cells, c);
-              if (c->piece->valid_moves && c->piece->valid_moves->count > 0) {
-                for (size_t m = 0; m < c->piece->valid_moves->count; ++m) {
-                    Cell v = c->piece->valid_moves->items[m];
-                    DrawRectangleRec(v.active_rect, BLUE);
-                }
-              }
           } else {
             if (c == active_cell)
                 active_cell = NULL;
